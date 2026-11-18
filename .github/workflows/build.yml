@@ -1,0 +1,79 @@
+# On a tag, download the upstream packages, publish them as a GitHub Release
+# and have odio-apt-repo reindex. Runs when a tag is pushed by hand, or when
+# watch-upstream.yml dispatches it on the tag it just pushed (a tag pushed with
+# GITHUB_TOKEN does not trigger the push event).
+
+name: Mirror upstream release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    name: Download and verify upstream packages
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Fails if upstream no longer carries the upmpdcli version of the tag:
+      # its APT repositories only keep the latest build.
+      - name: Fetch
+        run: ./scripts/sync-upstream.sh fetch --tag "${GITHUB_REF_NAME}" dist
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: upmpdcli-deb
+          path: dist/debs/*.deb
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload sources and release notes
+        uses: actions/upload-artifact@v7
+        with:
+          name: upmpdcli-sources
+          path: |
+            dist/sources/
+            dist/notes.md
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Release and reindex
+    needs: fetch
+    permissions:
+      contents: write
+    uses: b0bbywan/odio-ci/.github/workflows/release.yml@v1.0.3
+    with:
+      artifact_pattern: upmpdcli-deb
+    secrets:
+      apt_repo_token: ${{ secrets.APT_REPO_TOKEN }}
+
+  # The reusable release only attaches .debs; the sources go alongside them.
+  sources:
+    name: Attach sources
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download sources
+        uses: actions/download-artifact@v8
+        with:
+          name: upmpdcli-sources
+          path: dist
+
+      - name: Attach sources and set release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" dist/sources/* --clobber
+          gh release edit "${GITHUB_REF_NAME}" --notes-file dist/notes.md
