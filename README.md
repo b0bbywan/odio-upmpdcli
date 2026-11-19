@@ -37,3 +37,6 @@ upmpdcli and libupnpp are GPL/LGPL, libnpupnp is BSD-like; see each package's
 `/usr/share/doc/<package>/copyright`. The matching upstream sources are
 attached to each release and available at
 [framagit.org/medoc92](https://framagit.org/medoc92).
+
+The scripts and workflows of this repository are under the [MIT license](LICENSE);
+it does not cover the mirrored packages.
