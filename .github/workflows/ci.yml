@@ -1,0 +1,30 @@
+# On pull requests: lint the sync script and run it read-only against upstream,
+# so a PR shows what the next watch run would tag.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Lint and plan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # plan reads the existing tags
+
+      - name: ShellCheck
+        run: shellcheck scripts/sync-upstream.sh
+
+      - name: Plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: ./scripts/sync-upstream.sh plan
